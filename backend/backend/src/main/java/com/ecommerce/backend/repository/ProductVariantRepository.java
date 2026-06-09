@@ -1,0 +1,24 @@
+package com.ecommerce.backend.repository;
+
+import com.ecommerce.backend.entity.ProductVariant;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import jakarta.persistence.LockModeType;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface ProductVariantRepository extends JpaRepository<ProductVariant, UUID> {
+    List<ProductVariant> findByProductId(UUID productId);
+    Optional<ProductVariant> findBySku(String sku);
+    boolean existsBySku(String sku);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT v FROM ProductVariant v WHERE v.id = :id")
+    Optional<ProductVariant> findByIdWithLock(@Param("id") UUID id);
+}

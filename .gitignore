@@ -1,0 +1,38 @@
+# Dependency directories
+**/node_modules/
+node_modules/
+
+# Next.js build and cache
+**/.next/
+.next/
+**/out/
+
+# Maven/Java build files
+**/target/
+target/
+**/*.class
+**/*.jar
+**/*.war
+
+# Environment variables (local credentials)
+**/.env*.local
+.env*.local
+
+# IDE configurations
+**/.idea/
+.idea/
+**/.vscode/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+**/logs/
