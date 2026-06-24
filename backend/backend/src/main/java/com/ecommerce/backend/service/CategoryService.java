@@ -20,14 +20,33 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Category Service
+ *
+ * Handles the business logic for hierarchical product categories.
+ * Provides APIs for generating category trees, fetching parent-child layouts, and administering categories.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CategoryService {
 
+    /**
+     * Repository interface for querying and saving category records in the database.
+     */
     private final CategoryRepository categoryRepository;
+
+    /**
+     * Repository interface for verifying that no active products are associated with a category before deletion.
+     */
     private final ProductRepository productRepository;
 
+    /**
+     * Retrieves the entire hierarchical tree of active categories (root categories with nested child subcategories).
+     * Results are cached for better catalog load performance.
+     *
+     * @return hierarchical list of CategoryResponse objects
+     */
     @Cacheable(value = "categories", key = "'tree'")
     @Transactional(readOnly = true)
     public List<CategoryResponse> getCategoryTree() {
@@ -37,6 +56,12 @@ public class CategoryService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Retrieves all categories in a flat list layout.
+     * Results are cached for performance.
+     *
+     * @return flat list of CategoryResponse objects
+     */
     @Cacheable(value = "categories", key = "'all'")
     @Transactional(readOnly = true)
     public List<CategoryResponse> getAllCategories() {
@@ -45,6 +70,13 @@ public class CategoryService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Retrieves details of a specific category by its unique UUID.
+     *
+     * @param id unique UUID of the category
+     * @return CategoryResponse details containing nested child subcategories
+     * @throws ResourceNotFoundException if the category is not found
+     */
     @Transactional(readOnly = true)
     public CategoryResponse getCategoryById(UUID id) {
         Category category = categoryRepository.findById(id)
@@ -52,6 +84,13 @@ public class CategoryService {
         return mapToResponseWithChildren(category);
     }
 
+    /**
+     * Retrieves a category configuration by its unique SEO slug.
+     *
+     * @param slug unique SEO slug of the category
+     * @return CategoryResponse details containing nested child subcategories
+     * @throws ResourceNotFoundException if no matching category is found
+     */
     @Transactional(readOnly = true)
     public CategoryResponse getCategoryBySlug(String slug) {
         Category category = categoryRepository.findBySlug(slug)
@@ -59,6 +98,14 @@ public class CategoryService {
         return mapToResponseWithChildren(category);
     }
 
+    /**
+     * Creates a new category. Supports setting parent links to create hierarchical structures.
+     * Evicts categories cache to sync the state.
+     *
+     * @param request configuration details for the new category
+     * @return the created CategoryResponse details
+     * @throws ResourceNotFoundException if parentId is supplied but the parent category is not found
+     */
     @CacheEvict(value = "categories", allEntries = true)
     @Transactional
     public CategoryResponse createCategory(CategoryRequest request) {
@@ -87,6 +134,15 @@ public class CategoryService {
         return mapToResponse(category);
     }
 
+    /**
+     * Updates an existing category configuration.
+     * Evicts categories cache.
+     *
+     * @param id unique UUID of the category to update
+     * @param request updated configurations
+     * @return the updated CategoryResponse details
+     * @throws ResourceNotFoundException if the target or target's new parent category does not exist
+     */
     @CacheEvict(value = "categories", allEntries = true)
     @Transactional
     public CategoryResponse updateCategory(UUID id, CategoryRequest request) {
@@ -120,6 +176,15 @@ public class CategoryService {
         return mapToResponse(category);
     }
 
+    /**
+     * Deletes a category by its UUID.
+     * Rejects deletion if it has nested subcategories or contains active products.
+     * Evicts categories cache.
+     *
+     * @param id unique UUID of the category to delete
+     * @throws ResourceNotFoundException if category does not exist
+     * @throws BadRequestException if nested subcategories or products are linked
+     */
     @CacheEvict(value = "categories", allEntries = true)
     @Transactional
     public void deleteCategory(UUID id) {
@@ -142,12 +207,24 @@ public class CategoryService {
         log.info("Category deleted: {}", id);
     }
 
+    /**
+     * Bulk deletes multiple categories. Performs validation on each category before deleting.
+     * Evicts categories cache.
+     *
+     * @param ids list of category UUIDs to delete
+     */
     @CacheEvict(value = "categories", allEntries = true)
     @Transactional
     public void deleteCategories(List<UUID> ids) {
         ids.forEach(this::deleteCategory);
     }
 
+    /**
+     * Retrieves direct active subcategories for a given parent category ID.
+     *
+     * @param parentId unique UUID of the parent category
+     * @return list of subcategories mapped to CategoryResponse
+     */
     @Transactional(readOnly = true)
     public List<CategoryResponse> getSubcategories(UUID parentId) {
         return categoryRepository.findByParentIdAndActiveTrueOrderByDisplayOrderAsc(parentId).stream()
@@ -157,6 +234,12 @@ public class CategoryService {
 
     // --- Mappers ---
 
+    /**
+     * Maps a Category database entity to a CategoryResponse DTO (flat).
+     *
+     * @param category the database entity
+     * @return mapped CategoryResponse details
+     */
     private CategoryResponse mapToResponse(Category category) {
         return CategoryResponse.builder()
                 .id(category.getId())
@@ -174,6 +257,12 @@ public class CategoryService {
                 .build();
     }
 
+    /**
+     * Maps a Category database entity to a CategoryResponse, recursively mapping active children.
+     *
+     * @param category the database entity
+     * @return CategoryResponse with children
+     */
     private CategoryResponse mapToResponseWithChildren(Category category) {
         CategoryResponse response = mapToResponse(category);
         if (category.getChildren() != null && !category.getChildren().isEmpty()) {

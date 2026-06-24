@@ -1,6 +1,7 @@
 import CartDrawer from '@/components/CartDrawer';
 import Footer from '@/components/Footer';
 import HeaderWrapper from '@/components/Headerwrapper';
+import WhatsAppButton from '@/components/WhatsAppButton';
 import { Metadata } from 'next';
 import { Hind_Siliguri, Inter } from 'next/font/google';
 import { Toaster } from 'react-hot-toast';
@@ -45,6 +46,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             },
           }}
         />
+
+        {/* WhatsApp Floating Button */}
+        <WhatsAppButton />
       </body>
     </html>
   );

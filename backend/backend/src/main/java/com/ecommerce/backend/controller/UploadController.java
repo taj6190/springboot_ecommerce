@@ -12,6 +12,12 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 
+/**
+ * Upload Controller
+ *
+ * Exposes endpoints for uploading and deleting files (images, banners, logos) using cloud storage (Cloudinary).
+ * Restricted to admin, product managers, or content editors.
+ */
 @RestController
 @RequestMapping("/admin/upload")
 @RequiredArgsConstructor
@@ -19,8 +25,18 @@ import java.util.Map;
 @Tag(name = "Upload", description = "File upload management")
 public class UploadController {
 
+    /**
+     * Service handling the interface integration with the Cloudinary CDN.
+     */
     private final CloudinaryService cloudinaryService;
 
+    /**
+     * Uploads a file (multipart) to Cloudinary into a target folder.
+     *
+     * @param file the raw multipart file payload from the form upload
+     * @param folder the destination directory name in Cloudinary (e.g. products, categories, sliders)
+     * @return a ResponseEntity containing the absolute URL of the uploaded asset
+     */
     @PostMapping
     @Operation(summary = "Upload a file to Cloudinary")
     public ResponseEntity<ApiResponse<Map<String, String>>> uploadFile(
@@ -30,6 +46,12 @@ public class UploadController {
         return ResponseEntity.ok(ApiResponse.success(Map.of("url", url)));
     }
 
+    /**
+     * Deletes a file from Cloudinary based on its full absolute URL.
+     *
+     * @param url the full URL of the asset to delete
+     * @return a ResponseEntity indicating successful deletion
+     */
     @DeleteMapping
     @Operation(summary = "Delete a file from Cloudinary")
     public ResponseEntity<ApiResponse<Void>> deleteFile(@RequestParam String url) {

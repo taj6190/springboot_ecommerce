@@ -18,15 +18,42 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+/**
+ * Wishlist Service
+ *
+ * Handles the business logic for customer wishlists.
+ * Manages adding/removing items, checking active entries, and returning detailed profile maps.
+ * Recalculates wishlist counters on related Product entities upon save or deletion.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class WishlistService {
 
+    /**
+     * Repository interface to query and update Wishlist entity states in the database.
+     */
     private final WishlistRepository wishlistRepository;
+
+    /**
+     * Repository interface to retrieve customer records.
+     */
     private final UserRepository userRepository;
+
+    /**
+     * Repository interface to fetch and update details of products being saved.
+     */
     private final ProductRepository productRepository;
 
+    /**
+     * Adds a product to the user's wishlist.
+     * Recalculates and updates the product's saved counter.
+     *
+     * @param userId unique UUID of the customer
+     * @param productId unique UUID of the product to add
+     * @throws DuplicateResourceException if the product is already saved in the customer's wishlist
+     * @throws ResourceNotFoundException if the customer or product records do not exist
+     */
     @Transactional
     public void addToWishlist(UUID userId, UUID productId) {
         if (wishlistRepository.existsByUserIdAndProductId(userId, productId)) {
@@ -46,6 +73,14 @@ public class WishlistService {
         productRepository.save(product);
     }
 
+    /**
+     * Removes a product from the customer's wishlist.
+     * Recalculates and updates the product's saved counter.
+     *
+     * @param userId unique UUID of the customer
+     * @param productId unique UUID of the product to remove
+     * @throws ResourceNotFoundException if the wishlist item is not found
+     */
     @Transactional
     public void removeFromWishlist(UUID userId, UUID productId) {
         Wishlist wishlist = wishlistRepository.findByUserIdAndProductId(userId, productId)
@@ -60,12 +95,25 @@ public class WishlistService {
         }
     }
 
+    /**
+     * Retrieves the wishlist items for a customer in a paginated DTO format.
+     *
+     * @param userId unique UUID of the customer
+     * @param pageable pagination parameters
+     * @return page of WishlistResponse objects
+     */
     @Transactional(readOnly = true)
     public Page<WishlistResponse> getUserWishlist(UUID userId, Pageable pageable) {
         return wishlistRepository.findByUserIdOrderByAddedAtDesc(userId, pageable)
                 .map(this::mapToResponse);
     }
 
+    /**
+     * Maps a Wishlist database entity to a WishlistResponse DTO.
+     *
+     * @param wishlist the wishlist entity record
+     * @return mapped WishlistResponse details
+     */
     private WishlistResponse mapToResponse(Wishlist wishlist) {
         Product p = wishlist.getProduct();
         return WishlistResponse.builder()
@@ -82,6 +130,13 @@ public class WishlistService {
                 .build();
     }
 
+    /**
+     * Checks if a product is saved in a user's wishlist.
+     *
+     * @param userId unique UUID of the user
+     * @param productId unique UUID of the product
+     * @return true if the item exists in the wishlist, false otherwise
+     */
     @Transactional(readOnly = true)
     public boolean isInWishlist(UUID userId, UUID productId) {
         return wishlistRepository.existsByUserIdAndProductId(userId, productId);

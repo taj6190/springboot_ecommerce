@@ -17,6 +17,7 @@
   --color-success: #10B981;
   --color-sale: #EF4444;
   --font-family-sans: var(--font-inter), var(--font-hind), ui-sans-serif, system-ui, sans-serif;
+  --animate-spin-slow: spin 10s linear infinite;
 }
 
 html {

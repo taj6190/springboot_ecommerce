@@ -11,13 +11,18 @@ import java.io.IOException;
 import java.util.Map;
 
 /**
- * Service for uploading and managing media files via Cloudinary.
+ * Cloudinary Service
+ *
+ * Provides a service layer for uploading, processing, and deleting media files (images, banners, logos) via Cloudinary CDN.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CloudinaryService {
 
+    /**
+     * Interface to the Cloudinary API client.
+     */
     private final Cloudinary cloudinary;
 
     /**

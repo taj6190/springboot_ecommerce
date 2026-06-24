@@ -18,24 +18,53 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Coupon Service
+ *
+ * Handles the business logic for discount coupons.
+ * Manages creation, lifecycle, pagination retrieval, bulk deletions, and checkout rules validation.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CouponService {
 
+    /**
+     * Repository interface for checking, saving, and updating Coupon records in the database.
+     */
     private final CouponRepository couponRepository;
 
+    /**
+     * Retrieves all coupons with pagination.
+     *
+     * @param pageable pagination parameters
+     * @return page of Coupon records
+     */
     @Transactional(readOnly = true)
     public Page<Coupon> getAllCoupons(Pageable pageable) {
         return couponRepository.findAll(pageable);
     }
 
+    /**
+     * Retrieves details of a specific coupon by its UUID.
+     *
+     * @param id unique UUID of the coupon
+     * @return the Coupon entity details
+     * @throws ResourceNotFoundException if the coupon is not found
+     */
     @Transactional(readOnly = true)
     public Coupon getCouponById(UUID id) {
         return couponRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon", "id", id));
     }
 
+    /**
+     * Creates a new coupon, converting the code format to upper case.
+     *
+     * @param coupon the coupon configuration to create
+     * @return created Coupon details
+     * @throws DuplicateResourceException if a coupon with the same code already exists
+     */
     @Transactional
     public Coupon createCoupon(Coupon coupon) {
         if (couponRepository.existsByCode(coupon.getCode())) {
@@ -45,6 +74,14 @@ public class CouponService {
         return couponRepository.save(coupon);
     }
 
+    /**
+     * Updates an existing coupon configuration.
+     *
+     * @param id unique UUID of the coupon to update
+     * @param updated updated coupon configurations
+     * @return updated Coupon details
+     * @throws ResourceNotFoundException if the coupon does not exist
+     */
     @Transactional
     public Coupon updateCoupon(UUID id, Coupon updated) {
         Coupon coupon = couponRepository.findById(id)
@@ -63,6 +100,12 @@ public class CouponService {
         return couponRepository.save(coupon);
     }
 
+    /**
+     * Deletes a coupon from the database.
+     *
+     * @param id unique UUID of the coupon to delete
+     * @throws ResourceNotFoundException if the coupon does not exist
+     */
     @Transactional
     public void deleteCoupon(UUID id) {
         if (!couponRepository.existsById(id)) {
@@ -71,13 +114,25 @@ public class CouponService {
         couponRepository.deleteById(id);
     }
 
+    /**
+     * Bulk deletes multiple coupons by their UUIDs.
+     *
+     * @param ids list of coupon UUIDs to delete
+     */
     @Transactional
     public void deleteCoupons(java.util.List<UUID> ids) {
         ids.forEach(this::deleteCoupon);
     }
 
     /**
-     * Validate and apply a coupon, returning the discount amount.
+     * Validates and applies a coupon code against order rules.
+     * Evaluates constraints (active dates, min order value, usage limits) and calculates the discount amount.
+     * Increments the coupon's usage count on success.
+     *
+     * @param code coupon code string (case-insensitive)
+     * @param orderTotal target order total value to validate against minimum amounts
+     * @return the calculated discount amount
+     * @throws BadRequestException if coupon is invalid, inactive, expired, limit reached, or below minimum order value
      */
     @Transactional
     public BigDecimal applyCoupon(String code, BigDecimal orderTotal) {

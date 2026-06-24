@@ -12,16 +12,41 @@ import java.time.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Report Service
+ *
+ * Handles the business logic for admin dashboard reporting and business intelligence metrics.
+ * Calculates daily/monthly sales revenues, categorizes orders by state, and queries top selling products.
+ */
 @Service
 @RequiredArgsConstructor
 public class ReportService {
 
+    /**
+     * Repository interface to query order statistics and calculate revenues.
+     */
     private final OrderRepository orderRepository;
+
+    /**
+     * Repository interface to calculate top selling products based on item sales volume.
+     */
     private final OrderItemRepository orderItemRepository;
+
+    /**
+     * Repository interface to retrieve product information and stock warnings.
+     */
     private final ProductRepository productRepository;
 
+    /**
+     * Target timezone zone ID to align analytics calculations (Dhaka, Bangladesh).
+     */
     private static final ZoneId BD_ZONE = ZoneId.of("Asia/Dhaka");
 
+    /**
+     * Compiles summary statistics for the admin dashboard (today's orders/revenue, monthly totals, order counts by status, and low stock warnings).
+     *
+     * @return a map containing the aggregated dashboard statistics
+     */
     @Transactional(readOnly = true)
     public Map<String, Object> getDashboardSummary() {
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -56,6 +81,12 @@ public class ReportService {
         return summary;
     }
 
+    /**
+     * Retrieves daily revenue breakdown over a historical period (e.g. weekly, monthly).
+     *
+     * @param period the reporting division duration ("weekly" or "monthly")
+     * @return a map containing date strings and their corresponding revenue amounts
+     */
     @Transactional(readOnly = true)
     public Map<String, BigDecimal> getRevenueByPeriod(String period) {
         Map<String, BigDecimal> revenue = new LinkedHashMap<>();
@@ -78,6 +109,12 @@ public class ReportService {
         return revenue;
     }
 
+    /**
+     * Retrieves a list of top-selling products based on quantity ordered.
+     *
+     * @param limit maximum size of the returned list
+     * @return list of maps containing product details and sales counts
+     */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getTopSellingProducts(int limit) {
         return orderItemRepository.findTopSellingProducts().stream()

@@ -7,7 +7,12 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Wishlist entity for customer favorites.
+ * Wishlist Entity
+ *
+ * Represents products saved by users for future reference or purchase.
+ *
+ * This acts as a many-to-many bridge between User and Product,
+ * with additional metadata like timestamp.
  */
 @Entity
 @Table(name = "wishlists", indexes = {
@@ -25,18 +30,30 @@ import java.util.UUID;
 @Builder
 public class Wishlist {
 
+    /**
+     * Unique identifier for wishlist entry.
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    /**
+     * User who added the product to wishlist.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    /**
+     * Product added to wishlist.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
+    /**
+     * Timestamp when product was added to wishlist.
+     */
     @Column(nullable = false)
     @Builder.Default
     private Instant addedAt = Instant.now();

@@ -135,51 +135,71 @@ export default function TrackOrderPage() {
         </div>
 
         {/* Search Section */}
-        <div className="bg-white border border-[#e2e4e8] p-8 mb-8">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-[#EF4A23] flex items-center justify-center mx-auto mb-4">
-              <Package size={28} className="text-white" />
+        <div className="mb-8 overflow-hidden">
+          {/* Dark hero strip */}
+          <div className="bg-slate-900 px-8 pt-10 pb-14 text-center relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-[#EF4A23]/10 via-transparent to-slate-900" />
+            <div className="relative z-10">
+              <div className="w-12 h-12 bg-[#EF4A23] flex items-center justify-center mx-auto mb-4 shadow-lg shadow-[#EF4A23]/25">
+                <Truck size={22} className="text-white" />
+              </div>
+              <h1 className="text-2xl font-black text-white uppercase tracking-tight mb-1.5">
+                Track Your Order
+              </h1>
+              <p className="text-xs text-slate-400 font-semibold uppercase tracking-widest">
+                Real-time delivery status updates
+              </p>
             </div>
-            <h1 className="text-2xl font-black text-[#081621] mb-2">Track Your Order</h1>
-            <p className="text-sm text-gray-500 max-w-md mx-auto">
-              Enter your order number to get real-time status updates on your purchase.
-            </p>
           </div>
 
-          <form onSubmit={handleTrack} className="max-w-lg mx-auto">
-            <div className="flex gap-3">
-              <div className="flex-1 relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Enter order number (e.g., ORD-20250609-XXXX)"
-                  value={orderNumber}
-                  onChange={(e) => setOrderNumber(e.target.value)}
-                  className="input-field pl-11"
-                />
+          {/* Floating search bar */}
+          <div className="px-8">
+            <form onSubmit={handleTrack} className="max-w-2xl mx-auto -mt-8 relative z-10">
+              <div className="bg-white border border-slate-200/80 p-2 shadow-2xl shadow-slate-200/80 transition-all duration-300 focus-within:border-orange-500/30 focus-within:ring-4 focus-within:ring-orange-500/5 flex flex-col sm:flex-row items-stretch gap-2">
+                <div className="flex items-center flex-1 min-w-0 pl-3">
+                  <Search className="text-slate-400 mr-2 flex-shrink-0" size={18} />
+                  <input
+                    type="text"
+                    placeholder="Enter order number (e.g., ORD-20250609-XXXX)"
+                    value={orderNumber}
+                    onChange={(e) => setOrderNumber(e.target.value)}
+                    className="w-full py-3.5 px-1 text-sm font-bold text-slate-800 placeholder-slate-400 outline-none bg-transparent"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading || !orderNumber.trim()}
+                  className="bg-slate-950 text-white hover:bg-[#EF4A23] transition-all duration-300 px-8 py-3.5 font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer select-none"
+                  style={{ borderRadius: '0px' }}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Locating...
+                    </>
+                  ) : (
+                    <>
+                      Track Order
+                      <ArrowRight size={14} />
+                    </>
+                  )}
+                </button>
               </div>
-              <button
-                type="submit"
-                disabled={loading || !orderNumber.trim()}
-                className="btn btn-accent disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? <Loader2 size={18} className="animate-spin" /> : 'Track'}
-              </button>
-            </div>
-          </form>
 
-          {error && (
-            <div className="max-w-lg mx-auto mt-4 bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600 font-medium flex items-center gap-2">
-              <XCircle size={16} />
-              {error}
-            </div>
-          )}
+              {error && (
+                <div className="mt-4 bg-red-50 border border-red-200 px-4 py-3 text-xs text-red-600 font-bold flex items-center gap-2">
+                  <XCircle size={14} className="shrink-0" />
+                  {error}
+                </div>
+              )}
 
-          {!isAuthenticated && (
-            <p className="text-center text-xs text-gray-400 mt-4">
-              <Link href="/login" className="text-[#EF4A23] font-bold hover:underline">Log in</Link> for easier order tracking
-            </p>
-          )}
+              {!isAuthenticated && (
+                <p className="text-center text-[11px] text-slate-400 font-semibold mt-4">
+                  <Link href="/login" className="text-[#EF4A23] font-bold hover:underline">Sign in</Link> to track your orders automatically
+                </p>
+              )}
+            </form>
+          </div>
         </div>
 
         {/* Order Result */}

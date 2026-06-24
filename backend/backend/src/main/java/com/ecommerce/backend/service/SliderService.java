@@ -13,30 +13,66 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Slider Service
+ *
+ * Handles the business logic for homepage promotional sliders and banners.
+ * Supports active slider listing (cached), admin CRUD management, bulk deletion, and display order resequencing.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class SliderService {
 
+    /**
+     * Repository interface for querying and modifying Slider records.
+     */
     private final SliderRepository sliderRepository;
 
+    /**
+     * Retrieves all active sliders sorted by display order.
+     * Caches query results to accelerate storefront render times.
+     *
+     * @return list of active Slider objects
+     */
     @Cacheable(value = "homepage", key = "'sliders'")
     @Transactional(readOnly = true)
     public List<Slider> getActiveSliders() {
         return sliderRepository.findByActiveTrueOrderByDisplayOrderAsc();
     }
 
+    /**
+     * Retrieves all configured sliders (both active and inactive).
+     *
+     * @return list of all Slider objects
+     */
     @Transactional(readOnly = true)
     public List<Slider> getAllSliders() {
         return sliderRepository.findAll();
     }
 
+    /**
+     * Creates a new slider entry.
+     * Evicts cached homepage sliders to publish changes.
+     *
+     * @param slider configuration details of the slider
+     * @return the saved Slider entity
+     */
     @CacheEvict(value = "homepage", key = "'sliders'")
     @Transactional
     public Slider createSlider(Slider slider) {
         return sliderRepository.save(slider);
     }
 
+    /**
+     * Updates an existing slider configuration.
+     * Evicts the homepage sliders cache.
+     *
+     * @param id unique UUID of the slider to update
+     * @param updated updated configuration details
+     * @return the updated Slider entity
+     * @throws ResourceNotFoundException if the slider is not found
+     */
     @CacheEvict(value = "homepage", key = "'sliders'")
     @Transactional
     public Slider updateSlider(UUID id, Slider updated) {
@@ -55,6 +91,13 @@ public class SliderService {
         return sliderRepository.save(slider);
     }
 
+    /**
+     * Deletes a slider by its UUID.
+     * Evicts the homepage sliders cache.
+     *
+     * @param id unique UUID of the slider to delete
+     * @throws ResourceNotFoundException if the slider does not exist
+     */
     @CacheEvict(value = "homepage", key = "'sliders'")
     @Transactional
     public void deleteSlider(UUID id) {
@@ -62,12 +105,24 @@ public class SliderService {
         sliderRepository.deleteById(id);
     }
 
+    /**
+     * Bulk deletes multiple sliders by their UUID list.
+     * Evicts the homepage sliders cache.
+     *
+     * @param ids list of slider UUIDs to delete
+     */
     @CacheEvict(value = "homepage", key = "'sliders'")
     @Transactional
     public void deleteSliders(List<UUID> ids) {
         ids.forEach(this::deleteSlider);
     }
 
+    /**
+     * Reorders the display sequence of sliders based on ordered list inputs.
+     * Evicts the homepage sliders cache.
+     *
+     * @param orderedIds ordered list of slider UUIDs representing their updated order
+     */
     @CacheEvict(value = "homepage", key = "'sliders'")
     @Transactional
     public void reorderSliders(List<UUID> orderedIds) {

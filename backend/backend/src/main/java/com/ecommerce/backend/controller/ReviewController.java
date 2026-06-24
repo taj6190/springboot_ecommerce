@@ -19,13 +19,30 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Review Controller
+ *
+ * Exposes endpoints for customer reviews and ratings of products.
+ * Includes public retrieval, customer submissions, and admin/editor moderation (approve/reject).
+ */
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "Reviews", description = "Product reviews")
 public class ReviewController {
 
+    /**
+     * Service handling the business logic for review submission and moderation.
+     */
     private final ReviewService reviewService;
 
+    /**
+     * Retrieves approved reviews for a specific product with pagination support.
+     * This endpoint is public.
+     *
+     * @param productId unique UUID of the product
+     * @param pageable pagination parameters
+     * @return a ResponseEntity containing a pageable list of approved reviews
+     */
     @GetMapping("/public/products/{productId}/reviews")
     @Operation(summary = "Get approved reviews for a product")
     public ResponseEntity<ApiResponse<Page<Review>>> getReviews(
@@ -33,6 +50,15 @@ public class ReviewController {
         return ResponseEntity.ok(ApiResponse.success(reviewService.getApprovedReviews(productId, pageable)));
     }
 
+    /**
+     * Submits a new product review from an authenticated customer.
+     * Newly submitted reviews default to pending state awaiting admin approval.
+     *
+     * @param productId unique UUID of the product being reviewed
+     * @param body request body map containing 'rating' and 'comment'
+     * @param user details of the authenticated customer submitting the review
+     * @return a ResponseEntity containing the created review
+     */
     @PostMapping("/reviews/{productId}")
     @Operation(summary = "Submit a review")
     public ResponseEntity<ApiResponse<Review>> submitReview(
@@ -45,6 +71,13 @@ public class ReviewController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Review submitted for approval", review));
     }
 
+    /**
+     * Retrieves all pending reviews awaiting moderation.
+     * Restricted to admin or content editor roles.
+     *
+     * @param pageable pagination parameters
+     * @return a ResponseEntity containing a pageable list of pending reviews
+     */
     @GetMapping("/admin/reviews/pending")
     @PreAuthorize("hasAnyRole('ADMIN','CONTENT_EDITOR')")
     @Operation(summary = "Get pending reviews")
@@ -52,6 +85,13 @@ public class ReviewController {
         return ResponseEntity.ok(ApiResponse.success(reviewService.getPendingReviews(pageable)));
     }
 
+    /**
+     * Approves a pending review, making it visible to the public.
+     * Restricted to admin or content editor roles.
+     *
+     * @param id unique UUID of the review
+     * @return a ResponseEntity containing the approved review
+     */
     @PatchMapping("/admin/reviews/{id}/approve")
     @PreAuthorize("hasAnyRole('ADMIN','CONTENT_EDITOR')")
     @Operation(summary = "Approve a review")
@@ -59,6 +99,13 @@ public class ReviewController {
         return ResponseEntity.ok(ApiResponse.success("Review approved", reviewService.approveReview(id)));
     }
 
+    /**
+     * Rejects and deletes a review from the system.
+     * Restricted to admin or content editor roles.
+     *
+     * @param id unique UUID of the review
+     * @return a ResponseEntity indicating successful rejection/deletion
+     */
     @DeleteMapping("/admin/reviews/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','CONTENT_EDITOR')")
     @Operation(summary = "Reject/delete a review")

@@ -4,13 +4,19 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+/**
+ * Request DTO for user login.
+ * Contains credentials required to authenticate a user.
+ */
 @Data
 public class LoginRequest {
 
+    /** The user's email address. Must be a valid, non-blank email format. */
     @NotBlank(message = "Email is required")
     @Email(message = "Invalid email format")
     private String email;
 
+    /** The user's password. Must not be blank. */
     @NotBlank(message = "Password is required")
     private String password;
 }

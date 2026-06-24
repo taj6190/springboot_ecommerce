@@ -24,19 +24,62 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Product Service
+ *
+ * Handles the business lifecycle of products, inventory stock levels, variants,
+ * images, FAQs, and categories. Performs text-based searches and logs catalog audit changes.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProductService {
 
+    /**
+     * Repository interface for querying and modifying Product entities.
+     */
     private final ProductRepository productRepository;
+
+    /**
+     * Repository interface for querying and saving ProductVariant details.
+     */
     private final ProductVariantRepository variantRepository;
+
+    /**
+     * Repository interface for ProductImage assets.
+     */
     private final ProductImageRepository imageRepository;
+
+    /**
+     * Repository interface to link categories to products.
+     */
     private final CategoryRepository categoryRepository;
+
+    /**
+     * Repository interface to link brands to products.
+     */
     private final BrandRepository brandRepository;
+
+    /**
+     * Repository interface for product tag search and creation.
+     */
     private final TagRepository tagRepository;
+
+    /**
+     * Repository interface to record auditing logs when products are modified.
+     */
     private final ProductChangeHistoryRepository changeHistoryRepository;
 
+
+    /**
+     * Retrieves all products in the system matching status and search keywords.
+     * Used mainly for admin panels.
+     *
+     * @param status optional filter by product status (e.g. PUBLISHED, DRAFT)
+     * @param keyword optional search term matching name (En/Bn) or SKU
+     * @param pageable pagination parameters
+     * @return page of matching ProductResponse details
+     */
     @Transactional(readOnly = true)
     public Page<ProductResponse> getAllProducts(ProductStatus status, String keyword, Pageable pageable) {
         Specification<Product> spec = Specification.where(null);
@@ -59,6 +102,18 @@ public class ProductService {
         return productRepository.findAll(spec, pageable).map(this::mapToResponse);
     }
 
+    /**
+     * Retrieves all published products matching public search filters.
+     * Used mainly on customer catalog pages.
+     *
+     * @param categoryIds optional filter by list of category UUIDs
+     * @param brandIds optional filter by list of brand UUIDs
+     * @param minPrice optional filter by minimum price
+     * @param maxPrice optional filter by maximum price
+     * @param keyword search keyword matching name or SKU
+     * @param pageable pagination parameters
+     * @return page of matching ProductResponse details
+     */
     @Transactional(readOnly = true)
     public Page<ProductResponse> getPublishedProducts(
             List<UUID> categoryIds, 
@@ -102,6 +157,13 @@ public class ProductService {
         return productRepository.findAll(spec, pageable).map(this::mapToResponse);
     }
 
+    /**
+     * Retrieves a detailed response DTO of a product by its UUID.
+     *
+     * @param id unique UUID of the product
+     * @return ProductResponse details
+     * @throws ResourceNotFoundException if the product is not found
+     */
     @Transactional(readOnly = true)
     public ProductResponse getProductById(UUID id) {
         Product product = productRepository.findById(id)
@@ -109,6 +171,13 @@ public class ProductService {
         return mapToResponse(product);
     }
 
+    /**
+     * Retrieves a product by its SEO friendly slug.
+     *
+     * @param slug unique SEO slug of the product
+     * @return ProductResponse details
+     * @throws ResourceNotFoundException if no matching product is found
+     */
     @Transactional(readOnly = true)
     public ProductResponse getProductBySlug(String slug) {
         Product product = productRepository.findByUrlSlug(slug)
@@ -116,6 +185,14 @@ public class ProductService {
         return mapToResponse(product);
     }
 
+    /**
+     * Creates a new product catalog item, including variants, images, FAQs, and SEO-friendly slug.
+     * Registers audit history. Evicts cache.
+     *
+     * @param request product configuration details
+     * @return the created ProductResponse details
+     * @throws DuplicateResourceException if the product SKU already exists
+     */
     @CacheEvict(value = "products", allEntries = true)
     @Transactional
     public ProductResponse createProduct(ProductRequest request) {
@@ -227,6 +304,15 @@ public class ProductService {
         return mapToResponse(product);
     }
 
+    /**
+     * Updates an existing product's catalog configuration, including categories, brand, tags,
+     * images, variants, FAQs, and specifications. Evicts cache.
+     *
+     * @param id unique UUID of the product to update
+     * @param request the updated configurations
+     * @return updated ProductResponse details
+     * @throws ResourceNotFoundException if the product or linked categories/brands do not exist
+     */
     @CacheEvict(value = "products", allEntries = true)
     @Transactional
     public ProductResponse updateProduct(UUID id, ProductRequest request) {
@@ -334,6 +420,16 @@ public class ProductService {
         return mapToResponse(product);
     }
 
+    /**
+     * Updates the stock level of a product.
+     * Supports ADD, SUBTRACT, and SET operations.
+     *
+     * @param id unique UUID of the product
+     * @param quantity the adjustment quantity
+     * @param operation the type of adjustment (ADD, SUBTRACT, SET)
+     * @return updated ProductResponse details
+     * @throws ResourceNotFoundException if the product is not found
+     */
     @Transactional
     public ProductResponse updateStock(UUID id, Integer quantity, String operation) {
         Product product = productRepository.findById(id)
@@ -358,6 +454,15 @@ public class ProductService {
         return mapToResponse(product);
     }
 
+    /**
+     * Deletes a product from the database by its UUID.
+     * If the product is linked to orders, it will be archived (soft-deleted) to protect integrity.
+     * Cleans up unmapped relationships (wishlists, reviews, change logs) to avoid FK issues.
+     * Evicts cache.
+     *
+     * @param id unique UUID of the product to delete
+     * @throws ResourceNotFoundException if the product is not found
+     */
     @CacheEvict(value = "products", allEntries = true)
     @Transactional
     public void deleteProduct(UUID id) {
@@ -384,53 +489,107 @@ public class ProductService {
         log.info("Product hard deleted: {}", id);
     }
 
+    /**
+     * Bulk deletes multiple products.
+     * Evicts cache.
+     *
+     * @param ids list of product UUIDs to delete
+     */
     @CacheEvict(value = "products", allEntries = true)
     @Transactional
     public void deleteProducts(List<UUID> ids) {
         ids.forEach(this::deleteProduct);
     }
 
+    /**
+     * Performs a text search on products matching name or SKU.
+     *
+     * @param keyword search keyword
+     * @param pageable pagination parameters
+     * @return page of ProductResponse details
+     */
     @Transactional(readOnly = true)
     public Page<ProductResponse> searchProducts(String keyword, Pageable pageable) {
         return productRepository.searchProducts(keyword, pageable).map(this::mapToResponse);
     }
 
+    /**
+     * Retrieves a page of active products belonging to a category.
+     *
+     * @param categoryId unique category UUID
+     * @param pageable pagination parameters
+     * @return page of ProductResponse details
+     */
     @Transactional(readOnly = true)
     public Page<ProductResponse> getProductsByCategory(UUID categoryId, Pageable pageable) {
         return productRepository.findByCategoryIdAndStatus(categoryId, ProductStatus.PUBLISHED, pageable)
                 .map(this::mapToResponse);
     }
 
+    /**
+     * Retrieves a page of active products belonging to a brand.
+     *
+     * @param brandId unique brand UUID
+     * @param pageable pagination parameters
+     * @return page of ProductResponse details
+     */
     @Transactional(readOnly = true)
     public Page<ProductResponse> getProductsByBrand(UUID brandId, Pageable pageable) {
         return productRepository.findByBrandIdAndStatus(brandId, ProductStatus.PUBLISHED, pageable)
                 .map(this::mapToResponse);
     }
 
+    /**
+     * Retrieves a list of active products marked as featured.
+     *
+     * @return list of ProductResponse details
+     */
     @Transactional(readOnly = true)
     public List<ProductResponse> getFeaturedProducts() {
         return productRepository.findByFeaturedTrueAndStatusOrderByCreatedAtDesc(ProductStatus.PUBLISHED)
                 .stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
+    /**
+     * Retrieves a list of active products marked as trending.
+     *
+     * @return list of ProductResponse details
+     */
     @Transactional(readOnly = true)
     public List<ProductResponse> getTrendingProducts() {
         return productRepository.findByTrendingTrueAndStatusOrderByCreatedAtDesc(ProductStatus.PUBLISHED)
                 .stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
+    /**
+     * Retrieves a list of active products that currently participate in a flash sale.
+     *
+     * @return list of ProductResponse details
+     */
     @Transactional(readOnly = true)
     public List<ProductResponse> getFlashSaleProducts() {
         return productRepository.findActiveFlashSaleProducts()
                 .stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
+    /**
+     * Retrieves a list of products whose stock is at or below the low stock threshold.
+     *
+     * @return list of ProductResponse details
+     */
     @Transactional(readOnly = true)
     public List<ProductResponse> getLowStockProducts() {
         return productRepository.findLowStockProducts()
                 .stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
+    /**
+     * Helper method to write product configuration change audit logs.
+     *
+     * @param productId unique UUID of the product
+     * @param type change type code
+     * @param details detailed audit note
+     */
     private void saveChangeHistory(UUID productId, String type, String details) {
         changeHistoryRepository.save(ProductChangeHistory.builder()
                 .productId(productId).changeType(type)
@@ -439,6 +598,12 @@ public class ProductService {
                 .build());
     }
 
+    /**
+     * Maps a Product database entity to a ProductResponse DTO, containing variants, FAQs, and specifications.
+     *
+     * @param p the database entity
+     * @return the mapped ProductResponse
+     */
     private ProductResponse mapToResponse(Product p) {
         return ProductResponse.builder()
                 .id(p.getId()).nameEn(p.getNameEn()).nameBn(p.getNameBn())

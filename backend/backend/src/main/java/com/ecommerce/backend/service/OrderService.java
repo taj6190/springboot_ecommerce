@@ -26,23 +26,67 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+/**
+ * Order Service
+ *
+ * Handles the business logic for customer checkout, order placement, order history, and state changes.
+ * Incorporates pessimistic database locking to guarantee concurrency safety for product inventory stock deduction.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderService {
 
+    /**
+     * Repository interface for querying and saving Order records.
+     */
     private final OrderRepository orderRepository;
+
+    /**
+     * Repository interface for pessimistic-lock checking and stock adjustment on Products.
+     */
     private final ProductRepository productRepository;
+
+    /**
+     * Repository interface for pessimistic-lock checking and stock adjustment on ProductVariants.
+     */
     private final ProductVariantRepository variantRepository;
+
+    /**
+     * Repository interface to search for authenticated User records linking to orders.
+     */
     private final UserRepository userRepository;
+
+    /**
+     * Repository interface to handle order payments.
+     */
     private final PaymentRepository paymentRepository;
+
+    /**
+     * Repository interface to review coupon rules.
+     */
     private final CouponRepository couponRepository;
+
+    /**
+     * Service layer utilized to validate and apply coupons.
+     */
     private final CouponService couponService;
 
+    /**
+     * Thread-safe sequence generator for unique order identifier numbers.
+     */
     private static final AtomicLong orderCounter = new AtomicLong(System.currentTimeMillis() % 100000);
 
     /**
-     * Place a new order with concurrency-safe stock deduction using pessimistic locking.
+     * Places a new order with concurrency-safe stock deduction using pessimistic locking.
+     * Evaluates item stock availability, decrements inventory, calculates totals, applies coupons,
+     * logs status history, and generates a Cash on Delivery (COD) pending payment record.
+     *
+     * @param userId unique UUID of the customer, or null if guest user checkout
+     * @param request payload containing contact details, items, addresses, and coupon codes
+     * @return OrderResponse summary mapping of the placed order
+     * @throws ResourceNotFoundException if any requested item variant, product, or customer record is missing
+     * @throws InsufficientStockException if requested order quantity exceeds available stock levels
      */
     @Transactional
     public OrderResponse placeOrder(UUID userId, OrderRequest request) {
@@ -156,6 +200,13 @@ public class OrderService {
         return mapToResponse(order);
     }
 
+    /**
+     * Retrieves an order's details by its unique UUID.
+     *
+     * @param id unique UUID of the order
+     * @return OrderResponse mapping
+     * @throws ResourceNotFoundException if the order is not found
+     */
     @Transactional(readOnly = true)
     public OrderResponse getOrderById(UUID id) {
         Order order = orderRepository.findById(id)
@@ -163,6 +214,13 @@ public class OrderService {
         return mapToResponse(order);
     }
 
+    /**
+     * Retrieves an order's details by its human-readable order number.
+     *
+     * @param orderNumber unique order number string
+     * @return OrderResponse mapping
+     * @throws ResourceNotFoundException if no matching order is found
+     */
     @Transactional(readOnly = true)
     public OrderResponse getOrderByNumber(String orderNumber) {
         Order order = orderRepository.findByOrderNumber(orderNumber)
@@ -170,21 +228,53 @@ public class OrderService {
         return mapToResponse(order);
     }
 
+    /**
+     * Retrieves a pageable list of orders placed by a specific user.
+     *
+     * @param userId unique UUID of the user
+     * @param pageable pagination options
+     * @return page of OrderResponse objects
+     */
     @Transactional(readOnly = true)
     public Page<OrderResponse> getOrdersByUser(UUID userId, Pageable pageable) {
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable).map(this::mapToResponse);
     }
 
+    /**
+     * Retrieves a pageable list of orders filtered by their status state.
+     *
+     * @param status target OrderStatus
+     * @param pageable pagination options
+     * @return page of OrderResponse objects
+     */
     @Transactional(readOnly = true)
     public Page<OrderResponse> getOrdersByStatus(OrderStatus status, Pageable pageable) {
         return orderRepository.findByStatusOrderByCreatedAtDesc(status, pageable).map(this::mapToResponse);
     }
 
+    /**
+     * Retrieves all orders in the system with pagination.
+     *
+     * @param pageable pagination options
+     * @return page of OrderResponse objects
+     */
     @Transactional(readOnly = true)
     public Page<OrderResponse> getAllOrders(Pageable pageable) {
         return orderRepository.findAll(pageable).map(this::mapToResponse);
     }
 
+    /**
+     * Updates an order's current status, logging the transition.
+     * Restores stock levels if the order changes to CANCELLED.
+     * Marks payment status as CONFIRMED if the order changes to DELIVERED.
+     *
+     * @param orderId unique UUID of the order to transition
+     * @param request status update request containing the new status and notes
+     * @param updatedBy email or username of the actor performing the status change
+     * @return the updated OrderResponse details
+     * @throws ResourceNotFoundException if the order is not found
+     * @throws BadRequestException if the status transition is invalid according to state rules
+     */
     @Transactional
     public OrderResponse updateOrderStatus(UUID orderId, OrderStatusUpdateRequest request, String updatedBy) {
         Order order = orderRepository.findById(orderId)
@@ -224,6 +314,12 @@ public class OrderService {
         return mapToResponse(order);
     }
 
+    /**
+     * Reverts stock deductions and returns items back to available inventory on order cancellations.
+     * Uses pessimistic locking to prevent race conditions during restoration.
+     *
+     * @param order the cancelled order entity
+     */
     private void restoreStock(Order order) {
         for (OrderItem item : order.getItems()) {
             if (item.getVariant() != null) {
@@ -242,6 +338,19 @@ public class OrderService {
         }
     }
 
+    /**
+     * Validates transition rules between order status states.
+     *
+     * Transition workflow:
+     * - PENDING -> CONFIRMED / CANCELLED
+     * - CONFIRMED -> PROCESSING / CANCELLED
+     * - PROCESSING -> SHIPPED / CANCELLED
+     * - SHIPPED -> DELIVERED / RETURNED
+     *
+     * @param from original order status
+     * @param to target order status
+     * @throws BadRequestException if transition is disallowed
+     */
     private void validateStatusTransition(OrderStatus from, OrderStatus to) {
         boolean valid = switch (from) {
             case PENDING -> to == OrderStatus.CONFIRMED || to == OrderStatus.CANCELLED;
@@ -250,21 +359,41 @@ public class OrderService {
             case SHIPPED -> to == OrderStatus.DELIVERED || to == OrderStatus.RETURNED;
             case DELIVERED, CANCELLED, RETURNED -> false;
         };
+
         if (!valid) {
             throw new BadRequestException("Invalid status transition from " + from + " to " + to);
         }
     }
 
+    /**
+     * Generates a unique, structured, human-readable order number.
+     * Format: BD-[YYYYMMDD]-[0000X]
+     *
+     * @return the generated order number string
+     */
     private String generateOrderNumber() {
         String date = LocalDate.now(ZoneId.of("Asia/Dhaka")).format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         return "BD-" + date + "-" + String.format("%05d", orderCounter.incrementAndGet() % 100000);
     }
 
+    /**
+     * Calculates shipping fees based on order subtotal guidelines.
+     * Free delivery is applied for subtotals over 2000 BDT, otherwise standard flat fee of 60 BDT.
+     *
+     * @param subtotal order subtotal before discounts
+     * @return the calculated shipping cost amount
+     */
     private BigDecimal calculateShippingCost(BigDecimal subtotal) {
         // Free shipping over 2000 BDT, otherwise 60 BDT
         return subtotal.compareTo(new BigDecimal("2000")) >= 0 ? BigDecimal.ZERO : new BigDecimal("60");
     }
 
+    /**
+     * Compiles detailed information about a product variant's attributes into a localized display format.
+     *
+     * @param v the product variant entity
+     * @return string summarizing variant attributes
+     */
     private String buildVariantInfo(ProductVariant v) {
         StringBuilder sb = new StringBuilder();
         if (v.getSize() != null) sb.append("Size: ").append(v.getSize());
@@ -273,6 +402,12 @@ public class OrderService {
         return sb.toString();
     }
 
+    /**
+     * Maps an Order database entity to an OrderResponse DTO.
+     *
+     * @param o the order entity record
+     * @return the mapped response details
+     */
     private OrderResponse mapToResponse(Order o) {
         return OrderResponse.builder()
                 .id(o.getId()).orderNumber(o.getOrderNumber())

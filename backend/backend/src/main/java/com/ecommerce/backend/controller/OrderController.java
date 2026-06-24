@@ -22,15 +22,31 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+/**
+ * Order Controller
+ *
+ * Exposes endpoints for managing purchase orders.
+ * Handles customer/guest order placement, order history retrieval, and admin-focused status updates.
+ */
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "Orders", description = "Order management")
 public class OrderController {
 
+    /**
+     * Service handling the business logic for ordering, checkout, and inventory decrement.
+     */
     private final OrderService orderService;
 
     // --- Customer endpoints ---
 
+    /**
+     * Places a new order for an authenticated customer.
+     *
+     * @param user details of the authenticated customer placing the order
+     * @param request the order payload containing items, shipping/billing address, and payment method details
+     * @return a ResponseEntity containing the placed order's details
+     */
     @PostMapping("/orders")
     @Operation(summary = "Place a new order")
     public ResponseEntity<ApiResponse<OrderResponse>> placeOrder(
@@ -40,6 +56,12 @@ public class OrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Order placed", response));
     }
 
+    /**
+     * Places a guest order without requiring authentication.
+     *
+     * @param request the guest order payload including contact email/phone, items, and address details
+     * @return a ResponseEntity containing the placed order's details
+     */
     @PostMapping("/public/orders")
     @Operation(summary = "Place a guest order")
     public ResponseEntity<ApiResponse<OrderResponse>> placeGuestOrder(@Valid @RequestBody OrderRequest request) {
@@ -47,6 +69,13 @@ public class OrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Guest order placed", response));
     }
 
+    /**
+     * Retrieves the order history for the currently logged-in user with pagination support.
+     *
+     * @param user details of the authenticated user
+     * @param pageable pagination parameters (page, size, sorting)
+     * @return a ResponseEntity containing a pageable list of user's orders
+     */
     @GetMapping("/orders")
     @Operation(summary = "Get my orders")
     public ResponseEntity<ApiResponse<Page<OrderResponse>>> getMyOrders(
@@ -55,6 +84,13 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success(orderService.getOrdersByUser(user.getId(), pageable)));
     }
 
+    /**
+     * Retrieves details of a specific order by its human-readable order number.
+     * This endpoint is public so customers/guests can track order status.
+     *
+     * @param orderNumber unique human-readable identifier of the order
+     * @return a ResponseEntity containing the order details
+     */
     @GetMapping("/orders/{orderNumber}")
     @Operation(summary = "Get order by order number")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrder(@PathVariable String orderNumber) {
@@ -63,6 +99,13 @@ public class OrderController {
 
     // --- Admin endpoints ---
 
+    /**
+     * Retrieves all orders placed in the system with pagination support.
+     * Restricted to admin or inventory manager users.
+     *
+     * @param pageable pagination parameters (page, size, sorting)
+     * @return a ResponseEntity containing a pageable list of all orders
+     */
     @GetMapping("/admin/orders")
     @PreAuthorize("hasAnyRole('ADMIN','INVENTORY_MANAGER')")
     @Operation(summary = "Get all orders (admin)")
@@ -70,6 +113,14 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success(orderService.getAllOrders(pageable)));
     }
 
+    /**
+     * Retrieves orders filtered by their current status (e.g. PENDING, SHIPPED).
+     * Restricted to admin or inventory manager users.
+     *
+     * @param status the order status to filter by
+     * @param pageable pagination parameters (page, size, sorting)
+     * @return a ResponseEntity containing a pageable list of matching orders
+     */
     @GetMapping("/admin/orders/status/{status}")
     @PreAuthorize("hasAnyRole('ADMIN','INVENTORY_MANAGER')")
     @Operation(summary = "Get orders by status")
@@ -78,6 +129,15 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success(orderService.getOrdersByStatus(status, pageable)));
     }
 
+    /**
+     * Updates the status of an existing order and registers the status history.
+     * Restricted to admin or inventory manager users.
+     *
+     * @param id unique UUID of the order
+     * @param request the new status payload containing status and optional comments
+     * @param user details of the admin/manager performing the update
+     * @return a ResponseEntity containing the updated order details
+     */
     @PatchMapping("/admin/orders/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN','INVENTORY_MANAGER')")
     @Operation(summary = "Update order status")
